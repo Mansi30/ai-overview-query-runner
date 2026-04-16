@@ -7,11 +7,15 @@ import "dotenv/config";
 const SETTLE_TIME = 5000; // ms after page load for extension detection + sync
 const QUERY_DELAY = 5000; // ms between queries to avoid Google rate limiting
 const AUTH_POLL_INTERVAL = 2000; // ms between auth status checks
+const EXTENSION_READY_TIMEOUT = 10000; // ms to wait for extension settings/auth visibility
+const EXTENSION_READY_POLL_INTERVAL = 250;
 
 const extensionPath = resolve(
   process.env.EXTENSION_PATH || "../AI-Overview-Tracker"
 );
 const queryFile = resolve(process.argv[2] || "./queries_in.txt");
+
+type SearchModePreference = "all" | "random" | "ai" | "no_ai";
 
 function loadQueries(filePath: string): string[] {
   const raw = readFileSync(filePath, "utf-8");
@@ -87,6 +91,75 @@ async function waitForCaptchaResolution(
   console.log("[captcha] Resolved. Continuing.");
 }
 
+function normalizeSearchModePreference(value: unknown): SearchModePreference {
+  if (value === "ai" || value === "no_ai" || value === "random") {
+    return value;
+  }
+
+  return "all";
+}
+
+function buildSearchUrl(query: string, preference: SearchModePreference): string {
+  const url = new URL("https://www.google.com/search");
+  url.searchParams.set("q", query);
+
+  if (preference === "ai") {
+    url.searchParams.set("udm", "50");
+  } else if (preference === "no_ai") {
+    url.searchParams.set("udm", "14");
+  } else if (preference === "random") {
+    const randomUdm = Math.random() < 0.5 ? "50" : "14";
+    url.searchParams.set("udm", randomUdm);
+  }
+
+  return url.toString();
+}
+
+async function getSearchModePreference(worker: Worker): Promise<SearchModePreference> {
+  const result = await worker.evaluate(() => {
+    return new Promise<{ settings?: { search_mode_preference?: string } }>((resolve) => {
+      chrome.storage.local.get(["settings"], (data) => resolve(data));
+    });
+  });
+
+  return normalizeSearchModePreference(
+    result.settings?.search_mode_preference
+  );
+}
+
+async function waitForExtensionReadiness(worker: Worker): Promise<void> {
+  const startedAt = Date.now();
+
+  while (Date.now() - startedAt < EXTENSION_READY_TIMEOUT) {
+    const state = await worker.evaluate(() => {
+      return new Promise<{
+        userId?: string;
+        userEmail?: string;
+        hasSettings: boolean;
+      }>((resolve) => {
+        chrome.storage.local.get(["userId", "userEmail", "settings"], (data) => {
+          resolve({
+            userId: typeof data.userId === "string" ? data.userId : undefined,
+            userEmail:
+              typeof data.userEmail === "string" ? data.userEmail : undefined,
+            hasSettings: Boolean(data.settings && typeof data.settings === "object"),
+          });
+        });
+      });
+    });
+
+    if (state.userId && state.userEmail && state.hasSettings) {
+      return;
+    }
+
+    await new Promise((r) => setTimeout(r, EXTENSION_READY_POLL_INTERVAL));
+  }
+
+  console.warn(
+    `[init] Extension readiness wait timed out after ${EXTENSION_READY_TIMEOUT}ms; continuing with fallback behavior.`
+  );
+}
+
 async function main() {
   const queries = loadQueries(queryFile);
   console.log(`Loaded ${queries.length} queries from ${queryFile}`);
@@ -108,6 +181,10 @@ async function main() {
   console.log(`Extension service worker ready: ${worker.url()}`);
 
   await waitForAuth(context, worker);
+  await waitForExtensionReadiness(worker);
+
+  const searchModePreference = await getSearchModePreference(worker);
+  console.log(`[mode] Active search mode: ${searchModePreference}`);
 
   const langMatch = queryFile.match(/queries_([a-z]{2,3})\.txt$/i);
   const queryLanguage = langMatch ? langMatch[1].toLowerCase() : "unknown";
@@ -129,19 +206,16 @@ async function main() {
     const query = queries[i];
     console.log(`\n[${i + 1}/${queries.length}] Searching: "${query}"`);
 
-    await page.goto(
-      `https://www.google.com/search?q=${encodeURIComponent(query)}`,
-      { waitUntil: "load" }
-    );
+    const searchUrl = buildSearchUrl(query, searchModePreference);
+
+    await page.goto(searchUrl, { waitUntil: "load" });
 
     // Check for CAPTCHA before waiting for the extension
     if (await isCaptcha(page)) {
       await waitForCaptchaResolution(page);
       // Re-navigate after CAPTCHA resolution since Google may have redirected
-      await page.goto(
-        `https://www.google.com/search?q=${encodeURIComponent(query)}`,
-        { waitUntil: "load" }
-      );
+      await waitForExtensionReadiness(worker);
+      await page.goto(searchUrl, { waitUntil: "load" });
     }
 
     // Wait for the extension's detection cycle (2s timer + buffer for classification/sync)
