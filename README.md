@@ -1,1 +1,1 @@
-# ai-overview-query-runner
+# AI Overview Query Runner

@@ -1,0 +1,19 @@
+{
+  "name": "ai-overview-query-runner",
+  "version": "1.0.0",
+  "description": "Playwright automation to batch-run Google searches with the AI Overview Tracker extension",
+  "type": "module",
+  "scripts": {
+    "start": "tsx src/run.ts"
+  },
+  "dependencies": {
+    "dotenv": "^16.4.7",
+    "playwright": "^1.52.0"
+  },
+  "devDependencies": {
+    "@types/chrome": "^0.1.40",
+    "@types/node": "^25.6.0",
+    "tsx": "^4.19.4",
+    "typescript": "^5.8.3"
+  }
+}

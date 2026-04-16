@@ -1,0 +1,265 @@
+{
+  "queryFile": "/Users/adrian/dev/master/s4/ai-overview-query-runner/queries/queries.csv",
+  "searchMode": "ai",
+  "startedAt": "2026-04-30T12:49:14.578Z",
+  "completedAt": "2026-04-30T12:56:15.254Z",
+  "summary": {
+    "total": 36,
+    "aiOverview": 33,
+    "noOverview": 3
+  },
+  "results": [
+    {
+      "pairId": "pair-003",
+      "query": "2024 regional election results Indonesia",
+      "language": "en",
+      "aiOverview": true,
+      "timestamp": "2026-04-30T12:49:51.555Z"
+    },
+    {
+      "pairId": "pair-003",
+      "query": "pemilu kepala daerah serentak 2024 hasil",
+      "language": "id",
+      "aiOverview": false,
+      "timestamp": "2026-04-30T12:50:02.458Z"
+    },
+    {
+      "pairId": "pair-004",
+      "query": "corruption infrastructure projects Indonesia latest",
+      "language": "en",
+      "aiOverview": false,
+      "timestamp": "2026-04-30T12:50:13.386Z"
+    },
+    {
+      "pairId": "pair-004",
+      "query": "korupsi proyek infrastruktur Indonesia terbaru",
+      "language": "id",
+      "aiOverview": true,
+      "timestamp": "2026-04-30T12:50:24.162Z"
+    },
+    {
+      "pairId": "pair-005",
+      "query": "Jakarta flooding disaster response",
+      "language": "en",
+      "aiOverview": true,
+      "timestamp": "2026-04-30T12:50:35.276Z"
+    },
+    {
+      "pairId": "pair-005",
+      "query": "bencana alam banjir Jakarta penanganan",
+      "language": "id",
+      "aiOverview": true,
+      "timestamp": "2026-04-30T12:50:46.143Z"
+    },
+    {
+      "pairId": "pair-006",
+      "query": "IKN Nusantara capital city construction update",
+      "language": "en",
+      "aiOverview": true,
+      "timestamp": "2026-04-30T12:50:56.996Z"
+    },
+    {
+      "pairId": "pair-006",
+      "query": "IKN Nusantara perkembangan terbaru pembangunan",
+      "language": "id",
+      "aiOverview": true,
+      "timestamp": "2026-04-30T12:51:08.020Z"
+    },
+    {
+      "pairId": "pair-007",
+      "query": "Indonesia China relations South China Sea",
+      "language": "en",
+      "aiOverview": true,
+      "timestamp": "2026-04-30T12:51:18.879Z"
+    },
+    {
+      "pairId": "pair-007",
+      "query": "hubungan Indonesia China Laut China Selatan",
+      "language": "id",
+      "aiOverview": true,
+      "timestamp": "2026-04-30T12:51:29.709Z"
+    },
+    {
+      "pairId": "pair-008",
+      "query": "press freedom Indonesia Reporters Without Borders",
+      "language": "en",
+      "aiOverview": true,
+      "timestamp": "2026-04-30T12:51:40.393Z"
+    },
+    {
+      "pairId": "pair-008",
+      "query": "kebebasan pers Indonesia Reporters Without Borders",
+      "language": "id",
+      "aiOverview": true,
+      "timestamp": "2026-04-30T12:51:51.205Z"
+    },
+    {
+      "pairId": "pair-009",
+      "query": "Indonesia poverty rate BPS 2025",
+      "language": "en",
+      "aiOverview": true,
+      "timestamp": "2026-04-30T12:52:01.801Z"
+    },
+    {
+      "pairId": "pair-009",
+      "query": "angka kemiskinan Indonesia BPS 2025",
+      "language": "id",
+      "aiOverview": true,
+      "timestamp": "2026-04-30T12:52:12.643Z"
+    },
+    {
+      "pairId": "pair-010",
+      "query": "online gambling crackdown Kominfo Indonesia",
+      "language": "en",
+      "aiOverview": true,
+      "timestamp": "2026-04-30T12:52:23.275Z"
+    },
+    {
+      "pairId": "pair-010",
+      "query": "judi online pemberantasan Kominfo",
+      "language": "id",
+      "aiOverview": true,
+      "timestamp": "2026-04-30T12:52:34.122Z"
+    },
+    {
+      "pairId": "pair-011",
+      "query": "police shooting civilians Indonesia latest case",
+      "language": "en",
+      "aiOverview": true,
+      "timestamp": "2026-04-30T12:52:44.934Z"
+    },
+    {
+      "pairId": "pair-011",
+      "query": "polisi tembak warga kasus terbaru",
+      "language": "id",
+      "aiOverview": true,
+      "timestamp": "2026-04-30T12:52:55.727Z"
+    },
+    {
+      "pairId": "pair-012",
+      "query": "tax amnesty for corruptors controversy Indonesia",
+      "language": "en",
+      "aiOverview": true,
+      "timestamp": "2026-04-30T12:53:06.417Z"
+    },
+    {
+      "pairId": "pair-012",
+      "query": "amnesti koruptor kontroversi kebijakan",
+      "language": "id",
+      "aiOverview": true,
+      "timestamp": "2026-04-30T12:53:17.127Z"
+    },
+    {
+      "pairId": "pair-013",
+      "query": "Indonesia foreign debt 2025",
+      "language": "en",
+      "aiOverview": true,
+      "timestamp": "2026-04-30T12:53:28.024Z"
+    },
+    {
+      "pairId": "pair-013",
+      "query": "utang luar negeri Indonesia 2025",
+      "language": "id",
+      "aiOverview": true,
+      "timestamp": "2026-04-30T12:53:38.939Z"
+    },
+    {
+      "pairId": "pair-014",
+      "query": "Kalimantan deforestation palm oil",
+      "language": "en",
+      "aiOverview": true,
+      "timestamp": "2026-04-30T12:53:49.727Z"
+    },
+    {
+      "pairId": "pair-014",
+      "query": "deforestasi hutan Kalimantan sawit",
+      "language": "id",
+      "aiOverview": true,
+      "timestamp": "2026-04-30T12:54:00.419Z"
+    },
+    {
+      "pairId": "pair-015",
+      "query": "Chinese workers in Indonesia controversy",
+      "language": "en",
+      "aiOverview": true,
+      "timestamp": "2026-04-30T12:54:11.189Z"
+    },
+    {
+      "pairId": "pair-015",
+      "query": "tenaga kerja asing China di Indonesia",
+      "language": "id",
+      "aiOverview": true,
+      "timestamp": "2026-04-30T12:54:21.973Z"
+    },
+    {
+      "pairId": "pair-016",
+      "query": "Pertamina fuel price subsidy update",
+      "language": "en",
+      "aiOverview": true,
+      "timestamp": "2026-04-30T12:54:32.752Z"
+    },
+    {
+      "pairId": "pair-016",
+      "query": "harga BBM pertamina subsidi terbaru",
+      "language": "id",
+      "aiOverview": true,
+      "timestamp": "2026-04-30T12:54:43.699Z"
+    },
+    {
+      "pairId": "pair-017",
+      "query": "KPK weakening anti-corruption Indonesia",
+      "language": "en",
+      "aiOverview": true,
+      "timestamp": "2026-04-30T12:54:54.646Z"
+    },
+    {
+      "pairId": "pair-017",
+      "query": "KPK melemah pemberantasan korupsi",
+      "language": "id",
+      "aiOverview": true,
+      "timestamp": "2026-04-30T12:55:05.364Z"
+    },
+    {
+      "pairId": "pair-018",
+      "query": "youth unemployment Indonesia",
+      "language": "en",
+      "aiOverview": true,
+      "timestamp": "2026-04-30T12:55:16.042Z"
+    },
+    {
+      "pairId": "pair-018",
+      "query": "pengangguran generasi muda Indonesia",
+      "language": "id",
+      "aiOverview": false,
+      "timestamp": "2026-04-30T12:55:26.713Z"
+    },
+    {
+      "pairId": "pair-019",
+      "query": "social media blocking government Indonesia",
+      "language": "en",
+      "aiOverview": true,
+      "timestamp": "2026-04-30T12:55:37.407Z"
+    },
+    {
+      "pairId": "pair-019",
+      "query": "media sosial blokir pemerintah Indonesia",
+      "language": "id",
+      "aiOverview": true,
+      "timestamp": "2026-04-30T12:55:48.306Z"
+    },
+    {
+      "pairId": "pair-020",
+      "query": "Indonesia joining BRICS economic impact",
+      "language": "en",
+      "aiOverview": true,
+      "timestamp": "2026-04-30T12:55:59.237Z"
+    },
+    {
+      "pairId": "pair-020",
+      "query": "BRICS Indonesia bergabung dampak ekonomi",
+      "language": "id",
+      "aiOverview": true,
+      "timestamp": "2026-04-30T12:56:10.248Z"
+    }
+  ]
+}
