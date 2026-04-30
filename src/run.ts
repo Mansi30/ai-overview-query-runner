@@ -6,7 +6,7 @@ import {
   existsSync,
   unlinkSync,
 } from "fs";
-import { resolve } from "path";
+import { resolve, basename } from "path";
 import { tmpdir } from "os";
 import "dotenv/config";
 
@@ -22,15 +22,22 @@ const freshRun = cliArgs.includes("--fresh");
 const queryFileArg = cliArgs.find((a) => !a.startsWith("--"));
 
 const extensionPath = resolve(process.env.EXTENSION_PATH || "../AI-Overview-Tracker");
-const queryFile = resolve(queryFileArg || "./queries_in.txt");
-const stem = queryFile.endsWith(".txt") ? queryFile.slice(0, -4) : queryFile;
-const resultsFile = `${stem}.results.json`;
+const queryFile = resolve(
+  queryFileArg && queryFileArg.includes("/")
+    ? queryFileArg
+    : `./queries/${queryFileArg || "queries.csv"}`
+);
+const stem = queryFile.endsWith(".csv") || queryFile.endsWith(".txt")
+  ? queryFile.slice(0, -4)
+  : queryFile;
+const resultsFile = `query_results/${basename(stem)}.results.json`;
 const checkpointFile = `${stem}.checkpoint.json`;
 
 type SearchModePreference = "all" | "random" | "ai" | "no_ai";
 
 type QueryResult = {
   query: string;
+  language: string;
   aiOverview: boolean;
   timestamp: string;
 };
@@ -39,6 +46,11 @@ type Checkpoint = {
   startedAt: string;
   completedCount: number;
   results: QueryResult[];
+};
+
+type QueryPair = {
+  en: string;
+  id: string;
 };
 
 // Module-level refs so signal handlers can clean up mid-run
@@ -68,12 +80,33 @@ function formatDuration(ms: number): string {
   return m > 0 ? `${m}m ${String(s % 60).padStart(2, "0")}s` : `${s}s`;
 }
 
-function loadQueries(filePath: string): string[] {
+function loadQueryPairs(filePath: string): QueryPair[] {
   const raw = readFileSync(filePath, "utf-8");
-  return raw
+  const lines = raw
     .split("\n")
     .map((line) => line.trim())
     .filter((line) => line && !line.startsWith("#"));
+  const dataLines = lines[0] === "en,id" ? lines.slice(1) : lines;
+  return dataLines.map((line) => {
+    const commaIndex = line.indexOf(",");
+    if (commaIndex === -1) {
+      return { en: line, id: "" };
+    }
+    return {
+      en: line.slice(0, commaIndex).trim(),
+      id: line.slice(commaIndex + 1).trim(),
+    };
+  });
+}
+
+// TODO: Replace with a real Firebase/Firestore check once the runner has
+// direct DB access. Should return true if a result for this (query, language)
+// pair has already been recorded, so the query is not executed again.
+async function isQueryAlreadyExecuted(
+  _query: string,
+  _language: string
+): Promise<boolean> {
+  return false;
 }
 
 function loadCheckpoint(): Checkpoint | null {
@@ -90,7 +123,6 @@ function saveCheckpoint(checkpoint: Checkpoint): void {
 }
 
 function writeResultsFile(
-  queryLanguage: string,
   searchMode: SearchModePreference,
   startedAt: string,
   results: QueryResult[]
@@ -101,7 +133,6 @@ function writeResultsFile(
     JSON.stringify(
       {
         queryFile,
-        queryLanguage,
         searchMode,
         startedAt,
         completedAt: new Date().toISOString(),
@@ -145,8 +176,18 @@ async function waitForAuth(
 
   const extensionId = worker.url().split("/")[2];
   const optionsUrl = `chrome-extension://${extensionId}/options.html`;
-  const optionsPage = await context.newPage();
-  await optionsPage.goto(optionsUrl);
+
+  // Wait up to 1s for the extension to auto-open its own options page before we open one.
+  const extensionPagePrefix = `chrome-extension://${extensionId}`;
+  const deadline = Date.now() + 1000;
+  while (!context.pages().find((p) => p.url().startsWith(extensionPagePrefix)) && Date.now() < deadline) {
+    await new Promise((r) => setTimeout(r, 100));
+  }
+  let optionsPage = context.pages().find((p) => p.url().startsWith(extensionPagePrefix));
+  if (!optionsPage) {
+    optionsPage = await context.newPage();
+    await optionsPage.goto(optionsUrl);
+  }
 
   console.log(
     "[auth] Not logged in. Please sign in on the options page that just opened..."
@@ -237,20 +278,9 @@ async function waitForExtensionReadiness(worker: Worker): Promise<void> {
 }
 
 async function main() {
-  const queries = loadQueries(queryFile);
-  console.log(`Loaded ${queries.length} queries from ${queryFile}`);
+  const pairs = loadQueryPairs(queryFile);
+  console.log(`Loaded ${pairs.length} query pairs from ${queryFile}`);
   console.log(`Extension path: ${extensionPath}`);
-
-  const langMatch = queryFile.match(/queries_([a-z]{2,3})\.txt$/i);
-  const queryLanguage = langMatch ? langMatch[1].toLowerCase() : "unknown";
-
-  if (queryLanguage === "unknown") {
-    console.warn(
-      `[lang] Warning: could not detect language from filename. ` +
-        `Events will be stored under collection "unknown" in Firestore. ` +
-        `Rename the file to queries_<lang>.txt (e.g. queries_en.txt) to fix this.`
-    );
-  }
 
   const checkpoint = loadCheckpoint();
   const startedAt = checkpoint?.startedAt ?? new Date().toISOString();
@@ -259,7 +289,7 @@ async function main() {
 
   if (checkpoint) {
     console.log(
-      `[resume] Resuming from query ${startIndex + 1}/${queries.length} — pass --fresh to start over`
+      `[resume] Resuming from pair ${startIndex + 1}/${pairs.length} — pass --fresh to start over`
     );
   }
 
@@ -286,53 +316,57 @@ async function main() {
   const searchModePreference = await getSearchModePreference(worker);
   console.log(`[mode] Active search mode: ${searchModePreference}`);
 
-  await worker.evaluate((lang: string) => {
-    return new Promise<void>((resolve) => {
-      chrome.storage.local.set({ query_language: lang }, () => resolve());
-    });
-  }, queryLanguage);
-
-  console.log(`[lang] Storing events under collection: "${queryLanguage}"`);
-
   const page = context.pages()[0] || (await context.newPage());
   const runStartTime = Date.now();
 
-  for (let i = startIndex; i < queries.length; i++) {
-    const query = queries[i];
-    const queriesDone = i - startIndex;
+  for (let i = startIndex; i < pairs.length; i++) {
+    const pair = pairs[i];
+    const pairsDone = i - startIndex;
     const elapsed = formatDuration(Date.now() - runStartTime);
     const eta =
-      queriesDone > 0
-        ? `, ~${formatDuration(((Date.now() - runStartTime) / queriesDone) * (queries.length - i))} remaining`
+      pairsDone > 0
+        ? `, ~${formatDuration(((Date.now() - runStartTime) / pairsDone) * (pairs.length - i))} remaining`
         : "";
-    console.log(`\n[${i + 1}/${queries.length}] "${query}"  (${elapsed}${eta})`);
+    console.log(`\n[${i + 1}/${pairs.length}] "${pair.en}" / "${pair.id}"  (${elapsed}${eta})`);
 
-    const searchUrl = buildSearchUrl(query, searchModePreference);
-    await page.goto(searchUrl, { waitUntil: "load" });
+    const variants = [
+      { query: pair.en, language: "en" },
+      { query: pair.id, language: "id" },
+    ].filter((v) => v.query !== "");
 
-    // Check for CAPTCHA before waiting for the extension
-    if (await isCaptcha(page)) {
-      await waitForCaptchaResolution(page);
-      // Re-navigate after CAPTCHA resolution since Google may have redirected
-      await waitForExtensionReadiness(worker);
+    for (const { query, language } of variants) {
+      if (await isQueryAlreadyExecuted(query, language)) {
+        console.log(`  [skip] "${query}" (${language}) — already in Firebase`);
+        continue;
+      }
+
+      await worker.evaluate((lang: string) => {
+        return new Promise<void>((resolve) => {
+          chrome.storage.local.set({ query_language: lang }, () => resolve());
+        });
+      }, language);
+
+      const searchUrl = buildSearchUrl(query, searchModePreference);
       await page.goto(searchUrl, { waitUntil: "load" });
-    }
 
-    // Wait for the extension's detection cycle (2s timer + buffer for classification/sync)
-    await page.waitForTimeout(SETTLE_TIME);
+      if (await isCaptcha(page)) {
+        await waitForCaptchaResolution(page);
+        await waitForExtensionReadiness(worker);
+        await page.goto(searchUrl, { waitUntil: "load" });
+      }
 
-    const hasOverview = await page.locator("[data-ai-overview-container]").count();
-    const aiOverview = hasOverview > 0;
+      await page.waitForTimeout(SETTLE_TIME);
 
-    results.push({ query, aiOverview, timestamp: new Date().toISOString() });
+      const hasOverview = await page.locator("[data-ai-overview-container]").count();
+      const aiOverview = hasOverview > 0;
 
-    console.log(`  -> ${aiOverview ? "AI Overview detected" : "No AI Overview"}`);
+      results.push({ query, language, aiOverview, timestamp: new Date().toISOString() });
+      console.log(`  [${language}] ${aiOverview ? "AI Overview detected" : "No AI Overview"}`);
 
-    saveCheckpoint({ startedAt, completedCount: i + 1, results });
-
-    if (i < queries.length - 1) {
       await page.waitForTimeout(QUERY_DELAY);
     }
+
+    saveCheckpoint({ startedAt, completedCount: i + 1, results });
   }
 
   const aiOverviewCount = results.filter((r) => r.aiOverview).length;
@@ -343,7 +377,7 @@ async function main() {
   console.log(`No AI Overview:     ${results.length - aiOverviewCount}`);
   console.log("=============================\n");
 
-  writeResultsFile(queryLanguage, searchModePreference, startedAt, results);
+  writeResultsFile(searchModePreference, startedAt, results);
 
   if (existsSync(checkpointFile)) unlinkSync(checkpointFile);
 
