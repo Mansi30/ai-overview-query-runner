@@ -41,9 +41,9 @@ npm start queries_en.txt         # pass a custom query file
 npm start queries_en.txt --fresh # ignore any saved checkpoint and start over
 ```
 
-Each run creates a fresh Chrome profile, so the extension's sign-in state does not persist between runs. The extension's options page opens automatically — sign in there and the runner continues once authenticated. If you want to change extension settings (e.g. AI Overview Mode), do so before signing in, because queries start immediately after authentication completes.
+- Each run creates a fresh Chrome profile, so the extension's sign-in state does not persist between runs. The extension's options page opens automatically — sign in there and the runner continues once authenticated. - **NOTE**: If you want to change extension settings (e.g. AI Overview Mode), do so before signing in (and save the settings), because queries start immediately after authentication completes.
 
-If Google serves a CAPTCHA, solve it in the browser window and the runner resumes automatically.
+- If Google serves a CAPTCHA, solve it in the browser window and the runner resumes automatically.
 
 ### Resume / checkpoint
 
