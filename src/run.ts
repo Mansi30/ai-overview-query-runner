@@ -1,4 +1,22 @@
 import { chromium, type BrowserContext, type Worker } from "playwright";
+import { getApp, getApps, initializeApp, type FirebaseApp } from "firebase/app";
+import {
+  getAuth,
+  signInWithEmailAndPassword,
+  type Auth,
+  type User,
+} from "firebase/auth";
+import {
+  collection,
+  doc,
+  getDocs,
+  getFirestore,
+  limit,
+  query,
+  where,
+  writeBatch,
+  type Firestore,
+} from "firebase/firestore";
 import {
   readFileSync,
   writeFileSync,
@@ -36,6 +54,7 @@ const checkpointFile = `${stem}.checkpoint.json`;
 type SearchModePreference = "all" | "random" | "ai" | "no_ai";
 
 type QueryResult = {
+  pairId?: string;
   query: string;
   language: string;
   aiOverview: boolean;
@@ -49,6 +68,7 @@ type Checkpoint = {
 };
 
 type QueryPair = {
+  pairId: string;
   en: string;
   id: string;
 };
@@ -80,33 +100,220 @@ function formatDuration(ms: number): string {
   return m > 0 ? `${m}m ${String(s % 60).padStart(2, "0")}s` : `${s}s`;
 }
 
+function splitCsvLine(line: string): string[] {
+  return line.split(",").map((cell) => cell.trim());
+}
+
 function loadQueryPairs(filePath: string): QueryPair[] {
   const raw = readFileSync(filePath, "utf-8");
   const lines = raw
     .split("\n")
     .map((line) => line.trim())
     .filter((line) => line && !line.startsWith("#"));
-  const dataLines = lines[0] === "en,id" ? lines.slice(1) : lines;
-  return dataLines.map((line) => {
-    const commaIndex = line.indexOf(",");
-    if (commaIndex === -1) {
-      return { en: line, id: "" };
-    }
-    return {
-      en: line.slice(0, commaIndex).trim(),
-      id: line.slice(commaIndex + 1).trim(),
-    };
-  });
+  if (lines.length === 0) return [];
+
+  const headerCells = splitCsvLine(lines[0]);
+  const headerIndex = new Map<string, number>();
+  headerCells.forEach((name, index) => headerIndex.set(name, index));
+  const hasHeader = headerIndex.has("en") && headerIndex.has("id");
+  const dataLines = hasHeader ? lines.slice(1) : lines;
+  const enIndex = hasHeader ? headerIndex.get("en") ?? 0 : 0;
+  const idIndex = hasHeader ? headerIndex.get("id") ?? 1 : 1;
+  const pairIdIndex = hasHeader ? headerIndex.get("pair_id") ?? -1 : -1;
+
+  const pairs: QueryPair[] = [];
+  let generatedCount = 0;
+
+  for (let i = 0; i < dataLines.length; i++) {
+    const cells = splitCsvLine(dataLines[i]);
+    const en = cells[enIndex] ?? "";
+    const id = cells[idIndex] ?? "";
+    const pairIdRaw = pairIdIndex >= 0 ? cells[pairIdIndex] ?? "" : "";
+    const pairId = pairIdRaw.trim() || `pair-${String(i + 1).padStart(3, "0")}`;
+    if (!pairIdRaw) generatedCount += 1;
+
+    pairs.push({ pairId, en: en.trim(), id: id.trim() });
+  }
+
+  if (generatedCount > 0) {
+    console.warn(
+      `[pairs] ${generatedCount} row(s) missing pair_id; generated IDs like pair-001.`
+    );
+  }
+
+  return pairs;
 }
 
-// TODO: Replace with a real Firebase/Firestore check once the runner has
-// direct DB access. Should return true if a result for this (query, language)
-// pair has already been recorded, so the query is not executed again.
+let firebaseApp: FirebaseApp | null = null;
+let firestoreDb: Firestore | null = null;
+let firebaseAuth: Auth | null = null;
+let authReady: Promise<void> | null = null;
+const queryExecutionCache = new Map<string, boolean>();
+
+function requireEnv(name: string): string {
+  const value = process.env[name];
+  if (!value) {
+    throw new Error(`[firebase] Missing ${name} environment variable.`);
+  }
+  return value;
+}
+
+function getFirebaseConfig() {
+  return {
+    apiKey: requireEnv("REACT_APP_FIREBASE_API_KEY"),
+    authDomain: requireEnv("REACT_APP_FIREBASE_AUTH_DOMAIN"),
+    projectId: requireEnv("REACT_APP_FIREBASE_PROJECT_ID"),
+    storageBucket: requireEnv("REACT_APP_FIREBASE_STORAGE_BUCKET"),
+    messagingSenderId: requireEnv("REACT_APP_FIREBASE_MESSAGING_SENDER_ID"),
+    appId: requireEnv("REACT_APP_FIREBASE_APP_ID"),
+  };
+}
+
+function getFirebaseApp(): FirebaseApp {
+  if (firebaseApp) return firebaseApp;
+  firebaseApp = getApps().length > 0 ? getApp() : initializeApp(getFirebaseConfig());
+  return firebaseApp;
+}
+
+function getFirestoreDb(): Firestore {
+  if (firestoreDb) return firestoreDb;
+  firestoreDb = getFirestore(getFirebaseApp());
+  return firestoreDb;
+}
+
+function getAuthClient(): Auth {
+  if (firebaseAuth) return firebaseAuth;
+  firebaseAuth = getAuth(getFirebaseApp());
+  return firebaseAuth;
+}
+
+async function ensureSignedIn(): Promise<void> {
+  if (authReady) return authReady;
+
+  authReady = (async () => {
+    const auth = getAuthClient();
+    if (auth.currentUser) return;
+
+    const email = requireEnv("FIREBASE_AUTH_EMAIL");
+    const password = requireEnv("FIREBASE_AUTH_PASSWORD");
+    await signInWithEmailAndPassword(auth, email, password);
+
+    const signedInUser = auth.currentUser as User | null;
+    if (!signedInUser) {
+      throw new Error("[firebase] Sign-in failed: no current user after auth.");
+    }
+
+    const expectedUserId = process.env.FIREBASE_USER_ID;
+    if (expectedUserId && signedInUser.uid !== expectedUserId) {
+      console.warn(
+        `[firebase] Authenticated user ${signedInUser.uid} does not match FIREBASE_USER_ID ${expectedUserId}.`
+      );
+    }
+  })();
+
+  try {
+    await authReady;
+  } catch (error) {
+    authReady = null;
+    throw error;
+  }
+}
+
+function normalizeQueryText(value: string): string {
+  return value.trim().toLowerCase();
+}
+
+function buildQueryCandidates(value: string): string[] {
+  const trimmed = value.trim();
+  if (!trimmed) return [];
+  const lower = trimmed.toLowerCase();
+  if (trimmed === lower) return [trimmed];
+  return [trimmed, lower];
+}
+
+function getLanguageCollection(language: string): "en" | "id" {
+  if (language === "en") return "en";
+  if (language === "id") return "id";
+  throw new Error(
+    `[firebase] Unsupported language "${language}". Expected "en" or "id".`
+  );
+}
+
+async function syncQueryPairs(pairs: QueryPair[]): Promise<void> {
+  if (pairs.length === 0) return;
+
+  await ensureSignedIn();
+
+  const userId = requireEnv("FIREBASE_USER_ID").trim();
+  if (!userId) {
+    throw new Error("[firebase] FIREBASE_USER_ID must not be empty.");
+  }
+
+  const batch = writeBatch(getFirestoreDb());
+  const pairCollection = collection(getFirestoreDb(), "users", userId, "query_pairs");
+  const now = new Date().toISOString();
+
+  for (const pair of pairs) {
+    if (!pair.pairId) {
+      throw new Error(`[pairs] Missing pair_id for "${pair.en}" / "${pair.id}".`);
+    }
+    if (pair.pairId.includes("/")) {
+      throw new Error(`[pairs] pair_id "${pair.pairId}" must not include "/".`);
+    }
+
+    const docRef = doc(pairCollection, pair.pairId);
+    batch.set(
+      docRef,
+      {
+        pairId: pair.pairId,
+        en: pair.en,
+        id: pair.id,
+        queryFile,
+        updatedAt: now,
+      },
+      { merge: true }
+    );
+  }
+
+  await batch.commit();
+  console.log(
+    `[pairs] Synced ${pairs.length} query pairs to Firestore at users/${userId}/query_pairs`
+  );
+}
+
 async function isQueryAlreadyExecuted(
-  _query: string,
-  _language: string
+  queryText: string,
+  language: string
 ): Promise<boolean> {
-  return false;
+  const candidates = buildQueryCandidates(queryText);
+  if (candidates.length === 0) return false;
+
+  await ensureSignedIn();
+
+  const collectionName = getLanguageCollection(language);
+  const cacheKey = `${collectionName}:${normalizeQueryText(queryText)}`;
+  const cached = queryExecutionCache.get(cacheKey);
+  if (cached !== undefined) return cached;
+
+  const userId = requireEnv("FIREBASE_USER_ID").trim();
+  if (!userId) {
+    throw new Error("[firebase] FIREBASE_USER_ID must not be empty.");
+  }
+
+  const userCollection = collection(
+    getFirestoreDb(),
+    "users",
+    userId,
+    collectionName
+  );
+  const q =
+    candidates.length === 1
+      ? query(userCollection, where("query", "==", candidates[0]), limit(1))
+      : query(userCollection, where("query", "in", candidates), limit(1));
+  const snapshot = await getDocs(q);
+  const exists = !snapshot.empty;
+  queryExecutionCache.set(cacheKey, exists);
+  return exists;
 }
 
 function loadCheckpoint(): Checkpoint | null {
@@ -281,6 +488,7 @@ async function main() {
   const pairs = loadQueryPairs(queryFile);
   console.log(`Loaded ${pairs.length} query pairs from ${queryFile}`);
   console.log(`Extension path: ${extensionPath}`);
+  await syncQueryPairs(pairs);
 
   const checkpoint = loadCheckpoint();
   const startedAt = checkpoint?.startedAt ?? new Date().toISOString();
@@ -327,7 +535,9 @@ async function main() {
       pairsDone > 0
         ? `, ~${formatDuration(((Date.now() - runStartTime) / pairsDone) * (pairs.length - i))} remaining`
         : "";
-    console.log(`\n[${i + 1}/${pairs.length}] "${pair.en}" / "${pair.id}"  (${elapsed}${eta})`);
+    console.log(
+      `\n[${i + 1}/${pairs.length}] (${pair.pairId}) "${pair.en}" / "${pair.id}"  (${elapsed}${eta})`
+    );
 
     const variants = [
       { query: pair.en, language: "en" },
@@ -360,7 +570,13 @@ async function main() {
       const hasOverview = await page.locator("[data-ai-overview-container]").count();
       const aiOverview = hasOverview > 0;
 
-      results.push({ query, language, aiOverview, timestamp: new Date().toISOString() });
+      results.push({
+        pairId: pair.pairId,
+        query,
+        language,
+        aiOverview,
+        timestamp: new Date().toISOString(),
+      });
       console.log(`  [${language}] ${aiOverview ? "AI Overview detected" : "No AI Overview"}`);
 
       await page.waitForTimeout(QUERY_DELAY);
