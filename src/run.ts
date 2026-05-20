@@ -121,7 +121,9 @@ function loadQueryPairs(filePath: string): QueryPair[] {
   const idIndex = hasHeader ? headerIndex.get("id") ?? 1 : 1;
   const pairIdIndex = hasHeader ? headerIndex.get("pair_id") ?? -1 : -1;
 
+  const fileStem = basename(filePath).replace(/\.(csv|txt)$/i, "");
   const pairs: QueryPair[] = [];
+  const seenIds = new Set<string>();
   let generatedCount = 0;
 
   for (let i = 0; i < dataLines.length; i++) {
@@ -129,15 +131,20 @@ function loadQueryPairs(filePath: string): QueryPair[] {
     const en = cells[enIndex] ?? "";
     const id = cells[idIndex] ?? "";
     const pairIdRaw = pairIdIndex >= 0 ? cells[pairIdIndex] ?? "" : "";
-    const pairId = pairIdRaw.trim() || `pair-${String(i + 1).padStart(3, "0")}`;
-    if (!pairIdRaw) generatedCount += 1;
+    const pairId = pairIdRaw.trim() || `${fileStem}-${String(i + 1).padStart(3, "0")}`;
+    if (!pairIdRaw.trim()) generatedCount += 1;
+
+    if (seenIds.has(pairId)) {
+      throw new Error(`[pairs] Duplicate pair_id "${pairId}" in ${filePath}`);
+    }
+    seenIds.add(pairId);
 
     pairs.push({ pairId, en: en.trim(), id: id.trim() });
   }
 
   if (generatedCount > 0) {
     console.warn(
-      `[pairs] ${generatedCount} row(s) missing pair_id; generated IDs like pair-001.`
+      `[pairs] ${generatedCount} row(s) missing pair_id; generated IDs like ${fileStem}-001.`
     );
   }
 

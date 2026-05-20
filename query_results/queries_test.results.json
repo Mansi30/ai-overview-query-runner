@@ -1,8 +1,8 @@
 {
   "queryFile": "/Users/adrian/dev/master/s4/ai-overview-query-runner/queries/queries_test.csv",
   "searchMode": "ai",
-  "startedAt": "2026-04-30T12:33:49.426Z",
-  "completedAt": "2026-04-30T12:36:12.725Z",
+  "startedAt": "2026-05-20T13:26:17.644Z",
+  "completedAt": "2026-05-20T13:27:37.173Z",
   "summary": {
     "total": 4,
     "aiOverview": 4,
@@ -10,32 +10,32 @@
   },
   "results": [
     {
-      "pairId": "pair-001",
-      "query": "Prabowo foreign policy 2025",
+      "pairId": "queries_test-001",
+      "query": "West Papua independence movement latest",
       "language": "en",
       "aiOverview": true,
-      "timestamp": "2026-04-30T12:34:52.672Z"
+      "timestamp": "2026-05-20T13:27:00.007Z"
     },
     {
-      "pairId": "pair-001",
-      "query": "prabowo kebijakan luar negeri 2025",
+      "pairId": "queries_test-001",
+      "query": "gerakan kemerdekaan Papua Barat terbaru",
       "language": "id",
       "aiOverview": true,
-      "timestamp": "2026-04-30T12:35:46.318Z"
+      "timestamp": "2026-05-20T13:27:10.804Z"
     },
     {
-      "pairId": "pair-002",
-      "query": "rising rice prices government response Indonesia",
+      "pairId": "queries_test-002",
+      "query": "Jokowi post-presidency political influence",
       "language": "en",
       "aiOverview": true,
-      "timestamp": "2026-04-30T12:35:57.039Z"
+      "timestamp": "2026-05-20T13:27:21.479Z"
     },
     {
-      "pairId": "pair-002",
-      "query": "harga beras naik solusi pemerintah",
+      "pairId": "queries_test-002",
+      "query": "pengaruh politik Jokowi setelah pensiun",
       "language": "id",
       "aiOverview": true,
-      "timestamp": "2026-04-30T12:36:07.722Z"
+      "timestamp": "2026-05-20T13:27:32.167Z"
     }
   ]
 }
